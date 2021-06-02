@@ -330,72 +330,89 @@ vector<int> verify_proof(bigint*** proof, bigint root_node, int* challenge, int 
 }
 
 //===============================
+bool check_query(int* chall, int number_of_chall, int file_size){
+
+  for (int i = 0; i< number_of_chall; i++){
+    if(chall[i] > file_size){
+      cout<<"\n There exist invalid challenge(s)"<<endl;
+      return false;
+    }
+  }
+  return true;
+}
+
+//===============================
 int main() {
-
-    bigint* file;
-    bigint test_,root_;
-    bigint** nodes;
-    int file_size = 67108864;
-    string binary_fileSize = toBinary(file_size);
-    int pad_size = binary_fileSize.length()+1;
-    int block_bit_size = 128;
-    int number_of_levels = log2(file_size);
-    int number_of_chall = 20;
-    int bit_size_of_chall = 80;
-    int int_modulus = file_size;
-    file = (bigint*)malloc(file_size * sizeof(bigint));
-    Random rd_;
-    cout<<"\n 1- Genenerating a random file"<<endl;
-    file = rd_.gen_randSet(file_size, block_bit_size);
-    //cout<<"\n file[0]:"<< file[0]<<endl;
-
-    // mpz_init_set_str(file[0], "5", 10);
-    // mpz_init_set_str(file[1], "6", 10);
-    // mpz_init_set_str(file[2], "7", 10);
-    // mpz_init_set_str(file[3], "8", 10);
-    // mpz_init_set_str(file[4], "9", 10);
-    // mpz_init_set_str(file[5], "10", 10);
-    // mpz_init_set_str(file[6], "11", 10);
-    // mpz_init_set_str(file[7], "12", 10);
-    //1- encode the file
-    //cout<<"\n 1:"<<endl;
-
-    cout<<"\n 2- Encoding the file"<<endl;
-    bigint* encoded_file = encode_file(file, file_size, pad_size);
-    //2- build a Merkle tree on the encoded file.
-    cout<<"\n 3- Building a tree on the file"<<endl;
-    nodes = build_MT_tree(encoded_file, file_size);
-    //cout<<"\n 3:"<<endl;
-    //3- extract the root
-    mpz_init_set(root_, nodes[number_of_levels-1][0]);
-    // 4- generate challenges
-    cout<<"\n 4- Generating Challenges"<<endl;
-    int* chall = gen_chall(number_of_chall, bit_size_of_chall, int_modulus);
-    for (int i = 0; i< number_of_chall; i++){
-      cout<<"\n challneged block indices: " <<chall[i]<<endl;
+  bigint* file;
+  bigint test_,root_, root_s;
+  bigint** nodes, **nodes_;
+  int file_size = 64;
+  string binary_fileSize = toBinary(file_size);
+  int pad_size = binary_fileSize.length()+1;
+  int block_bit_size = 128;
+  int number_of_levels = log2(file_size);
+  int number_of_chall = 5;
+  int bit_size_of_chall = 80;
+  int int_modulus = file_size;
+  file = (bigint*)malloc(file_size * sizeof(bigint));
+  Random rd_;
+  cout<<"\n 1- Genenerating a random file"<<endl;
+  file = rd_.gen_randSet(file_size, block_bit_size);
+  //// 1- Setup
+  cout<<"\n-----Setup-----"<<endl;
+  cout<<"\n a- Encoding the file"<<endl;
+  bigint* encoded_file = encode_file(file, file_size, pad_size);
+  // 1.a- build a Merkle tree on the encoded file.
+  cout<<"\n b- Building a tree on the file"<<endl;
+  nodes = build_MT_tree(encoded_file, file_size);
+  // 1.b- extract the root
+  mpz_init_set(root_, nodes[number_of_levels-1][0]);
+  //// 2- Serve
+  cout<<"\n-----Serve-----"<<endl;
+  // 2.a- build a Merkle tree on the encoded file.
+  cout<<"\n Building a tree on the file"<<endl;
+  nodes_ = build_MT_tree(encoded_file, file_size);
+  // 2.b- extract the root
+  mpz_init_set(root_s, nodes_[number_of_levels-1][0]);
+  // 2.c- compare the two roots
+  if (mpz_cmp(root_,root_s)!=0){
+    cout<<"\n The serve will no serve due to an invalid root provided"<<endl;
+    return 0;
+  }
+  //// 3- Gen Query
+  cout<<"\n-----Gen Query-----"<<endl;
+  int* chall = gen_chall(number_of_chall, bit_size_of_chall, int_modulus);
+  //// 4- Check Query
+  cout<<"\n-----Verify Query-----"<<endl;
+  bool check_q = check_query(chall, number_of_chall, file_size);
+  if (!check_q){
+    cout<<"\n The server will not serve due to invalid queries provided"<<endl;
+    return 0;
+  }
+  //// 5- generate proofs
+  cout<<"\n 5- Generating proofs"<<endl;
+  bigint*** proof_ = gen_proof(number_of_chall, chall, encoded_file, file_size, nodes);
+  //// 6- verify valid proofs
+  cout<<"\n 6- Verifying proofs"<<endl;
+  vector<int> vec_ = verify_proof(proof_, root_, chall, number_of_chall, file_size, pad_size);
+  string status;
+  if(vec_.size() == 0){
+    status = "All proofs are VALID";
+  }
+  else{
+    status = "Some proofs are INVALID";
+  }
+  cout<<"\n\n------------"<<endl;
+  cout<< "\n Status: "<<status<<endl;
+  if (status == "Some proofs are INVALID"){
+    for(int i = 0; i < vec_.size(); i++){
+      cout<<"\n Rejected proof index:"<<vec_[i]<<endl;
     }
-    // 5- generate proofs
-    cout<<"\n 5- Generating proofs"<<endl;
-    bigint*** proof_ = gen_proof(number_of_chall, chall, encoded_file, file_size, nodes);
-    //6- verify valid proofs
-    cout<<"\n 6- Verifying proofs"<<endl;
-    vector<int> vec_ = verify_proof(proof_, root_, chall, number_of_chall, file_size, pad_size);
-    string status;
-    if(vec_.size() == 0){
-      status = "All proofs are VALID";
-    }
-    else{
-      status = "Some proofs are INVALID";
-    }
-    cout<<"\n\n------------"<<endl;
-    cout<< "\n Status: "<<status<<endl;
-    if (status == "Some proofs are INVALID"){
+  }
+  cout<<"\n\n------------"<<endl;
+  //// 7- Identify
 
-      for(int i = 0; i < vec_.size(); i++){
-        cout<<"\n Rejected proof index:"<<vec_[i]<<endl;
-      }
-    }
-        cout<<"\n\n------------"<<endl;
+
     //7- for test only- verify invalid proofs
     // cout<<"\n\n------For test only------"<<endl;
     // bigint one;
@@ -410,3 +427,5 @@ int main() {
 
     return 0;
 }
+
+//% g++ -I /Users/aydinabadi/desktop/c++-test/cryptopp Rand.o  main.cpp /Users/aydinabadi/desktop/c++-test/cryptopp/libcryptopp.a  -o main -lgmpxx -lgmp
