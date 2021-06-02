@@ -18,7 +18,7 @@ using namespace std;
 using namespace CryptoPP;
 typedef mpz_t bigint;
 
-
+//===============================
 string toBinary(int n){
 
   string res;
@@ -29,6 +29,7 @@ string toBinary(int n){
   return res;
 }
 
+//===============================
 bigint* encode_file(bigint* file, int file_size, int pad_size){
 
   bigint* encoded_file;
@@ -40,7 +41,7 @@ bigint* encode_file(bigint* file, int file_size, int pad_size){
     str_file = mpz_get_str (NULL, 2, file[i]);
     //convert integer i to binary string.
     str_index = toBinary(i);
-      //pad the file with fixed size tail
+    //pad the file with fixed size tail
     if(str_index.length() < pad_size){
       diff = pad_size - str_index.length();
       for(int i = 0; i < diff; i++){
@@ -60,6 +61,7 @@ bigint* encode_file(bigint* file, int file_size, int pad_size){
   return encoded_file;
 }
 
+//===============================
 bool search(int* array, int size, int val){
 
   for (int i = 0; i < size; ++i){
@@ -70,8 +72,7 @@ bool search(int* array, int size, int val){
   return false;
 }
 
-
-
+//===============================
 int extract_tail(bigint encoded_file, int pad_size){
 
   int extracted_tail;
@@ -89,6 +90,7 @@ int extract_tail(bigint encoded_file, int pad_size){
   return extracted_tail;
 }
 
+//===============================
 // description: given values a and b, it returns hash(a||b)
 bigint* hash_combined_values(bigint val_1, bigint val_2){
   string s_val_1, s_val_2, s_val_com;
@@ -109,6 +111,7 @@ bigint* hash_combined_values(bigint val_1, bigint val_2){
   return res;
 }
 
+//===============================
 bigint** build_MT_tree(bigint* file, int file_size){
 
   CryptoPP::SHA256 hash2;
@@ -127,24 +130,23 @@ bigint** build_MT_tree(bigint* file, int file_size){
       if(k == 0){
         res_ = hash_combined_values(file[i], file[i+1]);
         mpz_init_set(nodes[k][j], res_[0]);
-        mpz_clear(res_[0]);//xxx
+        mpz_clear(res_[0]);
         j++;
         i += 2;
       }
       else{
         res_ = hash_combined_values(nodes[k-1][i], nodes[k-1][i+1]);
         mpz_init_set(nodes[k][j], res_[0]);
-        mpz_clear(res_[0]);//xxx
+        mpz_clear(res_[0]);
         j++;
         i += 2;
       }
     }
   }
-  //mpz_clear(res_[0]);
   return nodes;
 }
 
-
+//===============================
 bool is_there_duplicated_elem(int* ar, int ar_size){
 
   int counter;
@@ -164,8 +166,7 @@ bool is_there_duplicated_elem(int* ar, int ar_size){
   return false;
 }
 
-
-
+//===============================
 int* gen_chall(int number_of_chall, int bit_size_of_chall, int int_modulus){
 
     Random rd_;
@@ -180,7 +181,7 @@ int* gen_chall(int number_of_chall, int bit_size_of_chall, int int_modulus){
     for (int i = 0; i < number_of_chall; i++){
       mpz_mod(set[i], set[i], bigint_modulus);
       ar[i] = mpz_get_ui(set[i]);
-      mpz_clear(set[i]);//xxx
+      mpz_clear(set[i]);
     }
     bool duplicated_ = is_there_duplicated_elem(ar, number_of_chall);
     if(duplicated_){
@@ -191,7 +192,7 @@ int* gen_chall(int number_of_chall, int bit_size_of_chall, int int_modulus){
     return ar;
 }
 
-
+//===============================
 int find_index(bigint* set, int set_size, bigint val,bool &res_){
 
   int res;
@@ -205,7 +206,7 @@ int find_index(bigint* set, int set_size, bigint val,bool &res_){
   return 0;
 }
 
-
+//===============================
 bigint*** gen_proof(int number_of_chall, int* challenge, bigint* file, int file_size, bigint** nodes){
 
   bigint*** proof;
@@ -216,19 +217,16 @@ bigint*** gen_proof(int number_of_chall, int* challenge, bigint* file, int file_
   temp_hash = (mpz_t*)malloc(1 * sizeof(mpz_t));
   for(int i = 0; i < number_of_chall; i++){
     proof[i] = (bigint**)malloc(size_1 * sizeof(bigint));
-    // for(int t = 0; t < size_1; t++){
-    //   proof[i][t] = (bigint*)malloc(2 * sizeof(bigint));
-    // }
     //go through different levels of the tree including leaf nodes
     int j = 0;
     for (int  k = 0; k < number_of_levels; k++){
       if(k == 0){
         if(challenge[i] % 2 == 0){ // if challenge[i] (or the index of challenged file block) is even
-          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));//xxx
+          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
           mpz_init_set(proof[i][j][0], file[challenge[i]]); // insert leaf node file[challenge[i]] to the proof
           mpz_init_set_str(proof[i][j][1], "0", 10);
           j++;
-          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));//xxx
+          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
           mpz_init_set(proof[i][j][0], file[challenge[i] + 1]); // insert the next leaf node file: [challenge[i]] to the proof
           mpz_init_set_str(proof[i][j][1], "0", 10);
           j++;
@@ -236,11 +234,11 @@ bigint*** gen_proof(int number_of_chall, int* challenge, bigint* file, int file_
           temp_hash = hash_combined_values(file[challenge[i]],file[challenge[i] + 1]);
         }
         else{ // if challenge[i] is odd
-          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));//xxx
+          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
           mpz_init_set(proof[i][j][0], file[challenge[i]-1]); // insert leaf node file[challenge[i]] to the proof
           mpz_init_set_str(proof[i][j][1], "0", 10);
           j++;
-          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));//xxx
+          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
           mpz_init_set(proof[i][j][0], file[challenge[i]]); // insert the next leaf node file: [challenge[i]] to the proof
           mpz_init_set_str(proof[i][j][1], "0", 10);
           j++;
@@ -250,15 +248,15 @@ bigint*** gen_proof(int number_of_chall, int* challenge, bigint* file, int file_
       else{ // if k is not zero--   // find the index of temp_hash in the next level node
         int nonil = file_size/(pow(2, k));//nonil: number_of_nodes_inEach_level
         bool res_;
-        int index = find_index(nodes[k-1], nonil, temp_hash[0], res_);// find the index of temp_hash in nodes[k-1]
+        int index = find_index(nodes[k-1], nonil, temp_hash[0], res_); // find the index of temp_hash in nodes[k-1]
         if(index % 2 == 0 && res_){
           if(index == 0 && k+1 == number_of_levels){
-            proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));//xxx
+            proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
             mpz_init_set(proof[i][j][0], nodes[k-1][index]);
             mpz_init_set_str(proof[i][j][1], "0", 10);
           }
           else{
-            proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));//xxx
+            proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
             mpz_init_set(proof[i][j][0], nodes[k-1][index+1]);
             mpz_init_set_str(proof[i][j][1], "0", 10);
             j++;
@@ -266,7 +264,7 @@ bigint*** gen_proof(int number_of_chall, int* challenge, bigint* file, int file_
           }
         }
         else if(index % 2 != 0 && res_){
-          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));//xxx
+          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
           mpz_init_set(proof[i][j][0], nodes[k-1][index-1]);
           mpz_init_set_str(proof[i][j][1], "1", 10);
           j++;
@@ -279,6 +277,7 @@ bigint*** gen_proof(int number_of_chall, int* challenge, bigint* file, int file_
   return proof;
 }
 
+//===============================
 vector<int> verify_proof(bigint*** proof, bigint root_node, int* challenge, int number_of_chall, int file_size, int pad_size){
 
   int size_1 = log2(file_size) + 1;
@@ -295,7 +294,6 @@ vector<int> verify_proof(bigint*** proof, bigint root_node, int* challenge, int 
       if(j == 0){
         // extract the tail of the two leaf nodes
         tail_1 = extract_tail(proof[i][j][0], pad_size);
-        //cout<<"\n in-ver-00"<<endl;
         tail_2 = extract_tail(proof[i][j+1][0], pad_size);
         // check if the tail equals the related challenge.
         is_in = search(challenge, number_of_chall, tail_1);
@@ -308,7 +306,7 @@ vector<int> verify_proof(bigint*** proof, bigint root_node, int* challenge, int 
         }
         else{
           res_.push_back(i);// store the index of rejected proof
-          break;//exit the inner loop.
+          break; //exit the inner loop.
         }
         j++;
       }
@@ -331,21 +329,20 @@ vector<int> verify_proof(bigint*** proof, bigint root_node, int* challenge, int 
   return res_;
 }
 
-
+//===============================
 int main() {
 
     bigint* file;
     bigint test_,root_;
     bigint** nodes;
-    int file_size = 67108864; //works: 33554432;// 32768;// number of file blocks
-    string binary_fileSize= toBinary(file_size);
+    int file_size = 67108864;
+    string binary_fileSize = toBinary(file_size);
     int pad_size = binary_fileSize.length()+1;
     int block_bit_size = 128;
     int number_of_levels = log2(file_size);
     int number_of_chall = 20;
     int bit_size_of_chall = 80;
     int int_modulus = file_size;
-
     file = (bigint*)malloc(file_size * sizeof(bigint));
     Random rd_;
     cout<<"\n 1- Genenerating a random file"<<endl;
@@ -362,9 +359,9 @@ int main() {
     // mpz_init_set_str(file[7], "12", 10);
     //1- encode the file
     //cout<<"\n 1:"<<endl;
+
     cout<<"\n 2- Encoding the file"<<endl;
     bigint* encoded_file = encode_file(file, file_size, pad_size);
-    //cout<<"\n 2:"<<endl;
     //2- build a Merkle tree on the encoded file.
     cout<<"\n 3- Building a tree on the file"<<endl;
     nodes = build_MT_tree(encoded_file, file_size);
