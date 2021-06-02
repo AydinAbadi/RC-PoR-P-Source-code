@@ -342,21 +342,67 @@ bool check_query(int* chall, int number_of_chall, int file_size){
 }
 
 //===============================
+bool doubleCheck_proof_(bigint*** proof, bigint root_node, int* challenge, int number_of_chall, int file_size, int pad_size, int rejected_proof_index){
+
+  int size_1 = log2(file_size) + 1;
+  int tail_1, tail_2;
+  bool is_in, is_in_;
+  bigint* temp_hash;
+  bigint one;
+  mpz_init_set_str(one, "1", 10);
+  temp_hash = (mpz_t*)malloc(1 * sizeof(mpz_t));
+  int i = rejected_proof_index;
+  for (int  j = 0; j < size_1; j++){
+    if(j == 0){
+      // extract the tail of the two leaf nodes
+      tail_1 = extract_tail(proof[i][j][0], pad_size);
+      tail_2 = extract_tail(proof[i][j+1][0], pad_size);
+        // check if the tail equals the related challenge.
+      if(challenge[i] == tail_1 || challenge[i] == tail_2){
+        temp_hash = hash_combined_values(proof[i][j][0], proof[i][j+1][0]);
+      }
+      else{
+        cout<<"\n Proof is invalid"<<endl;
+        return false;
+      }
+      j++;
+    }
+    else{ // if j!=0
+      if(mpz_cmp(proof[i][j][1], one) == 0){
+        temp_hash = hash_combined_values(proof[i][j][0], temp_hash[0]);
+      }
+      else{// if mpz_cmp(proof[i][j][1], one) != 0) or when mpz_cmp(proof[i][j][1], zero) == 0
+        temp_hash = hash_combined_values(temp_hash[0], proof[i][j][0]);
+      }
+    }
+    if(j+1 == size_1){
+      if(mpz_cmp(temp_hash[0], root_node)!=0){
+        cout<<"\n Proof is invalid"<<endl;
+        return false;
+      }
+    }
+  }
+  mpz_clear(temp_hash[0]);
+  return true;
+}
+
+//===============================
 int main() {
   bigint* file;
   bigint test_,root_, root_s;
   bigint** nodes, **nodes_;
-  int file_size = 64;
+  int file_size = 256;
   string binary_fileSize = toBinary(file_size);
   int pad_size = binary_fileSize.length()+1;
   int block_bit_size = 128;
   int number_of_levels = log2(file_size);
-  int number_of_chall = 5;
+  int number_of_chall = 20;
   int bit_size_of_chall = 80;
   int int_modulus = file_size;
+  int rejected_proof_index;
   file = (bigint*)malloc(file_size * sizeof(bigint));
   Random rd_;
-  cout<<"\n 1- Genenerating a random file"<<endl;
+  // Genenerate a random file
   file = rd_.gen_randSet(file_size, block_bit_size);
   //// 1- Setup
   cout<<"\n-----Setup-----"<<endl;
@@ -390,10 +436,18 @@ int main() {
     return 0;
   }
   //// 5- generate proofs
-  cout<<"\n 5- Generating proofs"<<endl;
+  cout<<"\n-----Generate proofs-----"<<endl;
   bigint*** proof_ = gen_proof(number_of_chall, chall, encoded_file, file_size, nodes);
   //// 6- verify valid proofs
-  cout<<"\n 6- Verifying proofs"<<endl;
+  cout<<"\n-----Verify proofs-----"<<endl;
+
+
+  //xxxxx--------Comment this out to see the result of an invalid proof.
+  // bigint one;
+  // mpz_init_set_str(one, "4564564654564654456",10);
+  // mpz_set(proof_[1][0][0],one);
+  //xxxxxx-------------------
+
   vector<int> vec_ = verify_proof(proof_, root_, chall, number_of_chall, file_size, pad_size);
   string status;
   if(vec_.size() == 0){
@@ -404,28 +458,33 @@ int main() {
   }
   cout<<"\n\n------------"<<endl;
   cout<< "\n Status: "<<status<<endl;
+  int temp_counter = 0;
   if (status == "Some proofs are INVALID"){
     for(int i = 0; i < vec_.size(); i++){
       cout<<"\n Rejected proof index:"<<vec_[i]<<endl;
+      // store firt rejected proof's index
+      if(temp_counter == 0){
+        rejected_proof_index = vec_[i];
+        temp_counter++;
+      }
     }
   }
-  cout<<"\n\n------------"<<endl;
+  cout<<"\n\n------Identify a misbehaving party------"<<endl;
   //// 7- Identify
-
-
-    //7- for test only- verify invalid proofs
-    // cout<<"\n\n------For test only------"<<endl;
-    // bigint one;
-    // mpz_init_set_str(one, "4",10);
-    // mpz_set(proof_[1][0][0],one);
-    // vector<int> vec_1 = verify_proof(proof_, root_, chall, number_of_chall, file_size, pad_size);
-    // cout<<"\n Number of invalid proofs:"<<vec_1.size()<<endl;
-    // for(int i=0;i<vec_1.size(); i++){
-    //   cout<<"\n rejected proof index:"<<vec_1[i]<<endl;
-    //   //cout<<"\n rejected proof index:"<<chall[vec_1[i]]<<endl;
-    // }
-
+  // 7.a. Verify Query
+  bool check_q_ = check_query(chall, number_of_chall, file_size);
+  if (!check_q_){
+    cout<<"\n The query has been rejected by the Auditor"<<endl;
     return 0;
+  }
+  // 7.b. Check a certain proof, given rejected_proof_index.
+  bool double_check = doubleCheck_proof_(proof_, root_, chall, number_of_chall, file_size, pad_size, rejected_proof_index);
+  if (!double_check){
+    cout<<"\n Proof has been rejected by the Auditor"<<endl;
+  }
+  cout<<endl;
+  return 0;
 }
 
-//% g++ -I /Users/aydinabadi/desktop/c++-test/cryptopp Rand.o  main.cpp /Users/aydinabadi/desktop/c++-test/cryptopp/libcryptopp.a  -o main -lgmpxx -lgmp
+//g++ -I /Users/aydinabadi/desktop/c++-test/cryptopp Rand.o  main.cpp /Users/aydinabadi/desktop/c++-test/cryptopp/libcryptopp.a  -o main -lgmpxx -lgmp
+//g++ -I /Users/aydinabadi/desktop/c++-test/cryptopp Rand.o  modified-merkle-tree.cpp /Users/aydinabadi/desktop/c++-test/cryptopp/libcryptopp.a  -o main -lgmpxx -lgmp
