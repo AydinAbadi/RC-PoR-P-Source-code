@@ -1,5 +1,4 @@
-//
-
+//author: Aydin Abadi
 #include <iostream>
 #include <math.h>
 #include <string>
@@ -167,13 +166,16 @@ bool is_there_duplicated_elem(int* ar, int ar_size){
 }
 
 //===============================
-int* gen_chall(int number_of_chall, int bit_size_of_chall, int int_modulus){
+int* gen_chall_(int number_of_chall, int bit_size_of_chall, int int_modulus){
 
     Random rd_;
     int* ar;
     ar = new int[number_of_chall];
     bigint* set, bigint_modulus;
+    bool duplicated_ = true;
     set = (bigint*)malloc(number_of_chall * sizeof(bigint));
+
+    while(duplicated_){// this while loop can be commented out if duplication is allowed.
     set = rd_.gen_randSet(number_of_chall, bit_size_of_chall);// generate a set of random bigint
     // put them in the range: [0,int_modulus-1]
     mpz_init(bigint_modulus);
@@ -183,7 +185,8 @@ int* gen_chall(int number_of_chall, int bit_size_of_chall, int int_modulus){
       ar[i] = mpz_get_ui(set[i]);
       mpz_clear(set[i]);
     }
-    bool duplicated_ = is_there_duplicated_elem(ar, number_of_chall);
+     duplicated_ = is_there_duplicated_elem(ar, number_of_chall);
+    }
     if(duplicated_){
       cout<<"\n\n\t\t*******************************************************"<<endl;
       cout<<"\n\n\t\tNOTE: The challange array contains duplicated values--Pick a new array"<<endl;
@@ -191,6 +194,9 @@ int* gen_chall(int number_of_chall, int bit_size_of_chall, int int_modulus){
     }
     return ar;
 }
+
+
+
 
 //===============================
 int find_index(bigint* set, int set_size, bigint val,bool &res_){
@@ -391,12 +397,12 @@ int main() {
   bigint* file;
   bigint test_,root_, root_s;
   bigint** nodes, **nodes_;
-  int file_size = 256;
+  int file_size = 2048;
   string binary_fileSize = toBinary(file_size);
   int pad_size = binary_fileSize.length()+1;
   int block_bit_size = 128;
   int number_of_levels = log2(file_size);
-  int number_of_chall = 20;
+  int number_of_chall = 200;
   int bit_size_of_chall = 80;
   int int_modulus = file_size;
   int rejected_proof_index;
@@ -427,7 +433,7 @@ int main() {
   }
   //// 3- Gen Query
   cout<<"\n-----Gen Query-----"<<endl;
-  int* chall = gen_chall(number_of_chall, bit_size_of_chall, int_modulus);
+  int* chall = gen_chall_(number_of_chall, bit_size_of_chall, int_modulus);
   //// 4- Check Query
   cout<<"\n-----Verify Query-----"<<endl;
   bool check_q = check_query(chall, number_of_chall, file_size);
