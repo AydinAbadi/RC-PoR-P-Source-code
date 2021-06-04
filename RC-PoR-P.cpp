@@ -9,26 +9,27 @@
 #include <gmpxx.h>
 #include "Rand.h"
 using namespace std;
-// #include "cryptopp/cryptlib.h"
+#include "cryptopp/cryptlib.h"
+#include "cryptopp/shake.h"
 #include "cryptopp/sha.h"
 #include "cryptopp/filters.h"
  #include "cryptopp/hex.h"
  #include "cryptopp/secblock.h"
-//#include "cryptopp/pwdbased.h"
+#include "cryptopp/pwdbased.h"
 
  using CryptoPP::HexEncoder;
  using CryptoPP::HexDecoder;
  using CryptoPP::StringSink;
  using CryptoPP::StringSource;
  using CryptoPP::StreamTransformationFilter;
-//#include "cryptopp/ccm.h"
-// using CryptoPP::CTR_Mode;
-// typedef unsigned char byte;
+#include "cryptopp/ccm.h"
+using CryptoPP::CTR_Mode;
+typedef unsigned char byte;
  using CryptoPP::CBC_Mode;
-//#include "cryptopp/osrng.h"
-//using CryptoPP::AutoSeededRandomPool;
-//#include "cryptopp/cryptlib.h"
-//using CryptoPP::Exception;
+#include "cryptopp/osrng.h"
+using CryptoPP::AutoSeededRandomPool;
+#include "cryptopp/cryptlib.h"
+using CryptoPP::Exception;
 
 
 using namespace CryptoPP;
@@ -52,7 +53,6 @@ bigint* encode_file(bigint* file, int file_size, int pad_size){
   string str_file, str_index, str_diff, str_padded_file;
   int diff;
   encoded_file = (bigint*)malloc(file_size * sizeof(bigint));
-
   for(int i = 0; i < file_size; i++){
     //convert each file block into bitstring
     str_file = mpz_get_str (NULL, 2, file[i]);
@@ -109,9 +109,10 @@ int extract_tail(bigint encoded_file, int pad_size){
 
 //===============================
 // description: given values a and b, it returns hash(a||b)
-bigint* hash_combined_values(bigint val_1, bigint val_2){
+bigint* hash_combined_values(bigint val_1, bigint val_2, bigint modulus){
   string s_val_1, s_val_2, s_val_com;
   CryptoPP::SHA256 hash2;
+  //CryptoPP::SHAKE128 hash2;
   byte digest[CryptoPP::SHA256::DIGESTSIZE];
   bigint* res;
   res = (bigint*)malloc(1 * sizeof(bigint));
@@ -125,11 +126,12 @@ bigint* hash_combined_values(bigint val_1, bigint val_2){
   s_val_2.clear();
   mpz_init(res[0]);
   mpz_import(res[0], sizeof(digest), 1, sizeof(digest[0]), 0, 0, digest);
+  mpz_mod(res[0], res[0], modulus);
   return res;
 }
 
 //===============================
-bigint** build_MT_tree(bigint* file, int file_size){
+bigint** build_MT_tree(bigint* file, int file_size, bigint modulus){
 
   CryptoPP::SHA256 hash2;
   byte digest[CryptoPP::SHA256::DIGESTSIZE];
@@ -145,14 +147,14 @@ bigint** build_MT_tree(bigint* file, int file_size){
     temp_size_2 = file_size/(pow(2, k));
     for(int i = 0; i < temp_size_2;){
       if(k == 0){
-        res_ = hash_combined_values(file[i], file[i+1]);
+        res_ = hash_combined_values(file[i], file[i+1], modulus);
         mpz_init_set(nodes[k][j], res_[0]);
         mpz_clear(res_[0]);
         j++;
         i += 2;
       }
       else{
-        res_ = hash_combined_values(nodes[k-1][i], nodes[k-1][i+1]);
+        res_ = hash_combined_values(nodes[k-1][i], nodes[k-1][i+1], modulus);
         mpz_init_set(nodes[k][j], res_[0]);
         mpz_clear(res_[0]);
         j++;
@@ -193,7 +195,7 @@ int* gen_chall_(int number_of_chall, int bit_size_of_chall, int int_modulus){
     bool duplicated_ = true;
     set = (bigint*)malloc(number_of_chall * sizeof(bigint));
 
-    while(duplicated_){// this while loop can be commented out if duplication is allowed.
+    while(duplicated_){// this loop can be commented out if duplication is allowed.
     set = rd_.gen_randSet(number_of_chall, bit_size_of_chall);// generate a set of random bigint
     // put them in the range: [0,int_modulus-1]
     mpz_init(bigint_modulus);
@@ -228,7 +230,7 @@ int find_index(bigint* set, int set_size, bigint val,bool &res_){
 }
 
 //===============================
-bigint*** gen_proof(int number_of_chall, int* challenge, bigint* file, int file_size, bigint** nodes){
+bigint*** gen_proof(int number_of_chall, int* challenge, bigint* file, int file_size, bigint** nodes, bigint modulus){
 
   bigint*** proof;
   proof = (bigint***)malloc(number_of_chall * sizeof(bigint));
@@ -252,7 +254,7 @@ bigint*** gen_proof(int number_of_chall, int* challenge, bigint* file, int file_
           mpz_init_set_str(proof[i][j][1], "0", 10);
           j++;
          // generate hash(file[challenge[i]] ||file[challenge[i]+1])
-          temp_hash = hash_combined_values(file[challenge[i]],file[challenge[i] + 1]);
+          temp_hash = hash_combined_values(file[challenge[i]],file[challenge[i] + 1], modulus);
         }
         else{ // if challenge[i] is odd
           proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
@@ -263,7 +265,7 @@ bigint*** gen_proof(int number_of_chall, int* challenge, bigint* file, int file_
           mpz_init_set(proof[i][j][0], file[challenge[i]]); // insert the next leaf node file: [challenge[i]] to the proof
           mpz_init_set_str(proof[i][j][1], "0", 10);
           j++;
-          temp_hash = hash_combined_values(file[challenge[i]-1], file[challenge[i]]);
+          temp_hash = hash_combined_values(file[challenge[i]-1], file[challenge[i]], modulus);
         }
       }
       else{ // if k is not zero--   // find the index of temp_hash in the next level node
@@ -281,7 +283,7 @@ bigint*** gen_proof(int number_of_chall, int* challenge, bigint* file, int file_
             mpz_init_set(proof[i][j][0], nodes[k-1][index+1]);
             mpz_init_set_str(proof[i][j][1], "0", 10);
             j++;
-            temp_hash = hash_combined_values(nodes[k-1][index], nodes[k-1][index+1]);
+            temp_hash = hash_combined_values(nodes[k-1][index], nodes[k-1][index+1], modulus);
           }
         }
         else if(index % 2 != 0 && res_){
@@ -289,7 +291,7 @@ bigint*** gen_proof(int number_of_chall, int* challenge, bigint* file, int file_
           mpz_init_set(proof[i][j][0], nodes[k-1][index-1]);
           mpz_init_set_str(proof[i][j][1], "1", 10);
           j++;
-          temp_hash = hash_combined_values(nodes[k-1][index-1], nodes[k-1][index]);
+          temp_hash = hash_combined_values(nodes[k-1][index-1], nodes[k-1][index], modulus);
         }
       }
     }
@@ -299,7 +301,7 @@ bigint*** gen_proof(int number_of_chall, int* challenge, bigint* file, int file_
 }
 
 //===============================
-vector<int> verify_proof(bigint*** proof, bigint root_node, int* challenge, int number_of_chall, int file_size, int pad_size){
+vector<int> verify_proof(bigint*** proof, bigint root_node, int* challenge, int number_of_chall, int file_size, int pad_size, bigint modulus){
 
   int size_1 = log2(file_size) + 1;
   int tail_1, tail_2;
@@ -322,7 +324,7 @@ vector<int> verify_proof(bigint*** proof, bigint root_node, int* challenge, int 
         // check if (1) either proof[i][j][0] or  proof[i][j+1][0] is the challenged block,
         // and (2) there is no duplication of proof.
         if(((is_in || is_in_) == true) && (find(vec.begin(), vec.end(), challenge[i]) == vec.end())){
-          temp_hash = hash_combined_values(proof[i][j][0], proof[i][j+1][0]);
+          temp_hash = hash_combined_values(proof[i][j][0], proof[i][j+1][0], modulus);
           vec.push_back(challenge[i]);
         }
         else{
@@ -333,10 +335,10 @@ vector<int> verify_proof(bigint*** proof, bigint root_node, int* challenge, int 
       }
       else{ // if j!=0
         if(mpz_cmp(proof[i][j][1], one) == 0){
-          temp_hash = hash_combined_values(proof[i][j][0], temp_hash[0]);
+          temp_hash = hash_combined_values(proof[i][j][0], temp_hash[0], modulus);
         }
         else{// if mpz_cmp(proof[i][j][1], one) != 0) or when mpz_cmp(proof[i][j][1], zero) == 0
-          temp_hash = hash_combined_values(temp_hash[0], proof[i][j][0]);
+          temp_hash = hash_combined_values(temp_hash[0], proof[i][j][0], modulus);
         }
       }
       if(j+1 == size_1){
@@ -363,7 +365,7 @@ bool check_query(int* chall, int number_of_chall, int file_size){
 }
 
 //===============================
-bool doubleCheck_proof_(bigint*** proof, bigint root_node, int* challenge, int number_of_chall, int file_size, int pad_size, int rejected_proof_index){
+bool doubleCheck_proof_(bigint*** proof, bigint root_node, int* challenge, int number_of_chall, int file_size, int pad_size, int rejected_proof_index, bigint modulus){
 
   int size_1 = log2(file_size) + 1;
   int tail_1, tail_2;
@@ -380,7 +382,7 @@ bool doubleCheck_proof_(bigint*** proof, bigint root_node, int* challenge, int n
       tail_2 = extract_tail(proof[i][j+1][0], pad_size);
         // check if the tail equals the related challenge.
       if(challenge[i] == tail_1 || challenge[i] == tail_2){
-        temp_hash = hash_combined_values(proof[i][j][0], proof[i][j+1][0]);
+        temp_hash = hash_combined_values(proof[i][j][0], proof[i][j+1][0], modulus);
       }
       else{
         cout<<"\n Proof is invalid"<<endl;
@@ -390,10 +392,10 @@ bool doubleCheck_proof_(bigint*** proof, bigint root_node, int* challenge, int n
     }
     else{ // if j!=0
       if(mpz_cmp(proof[i][j][1], one) == 0){
-        temp_hash = hash_combined_values(proof[i][j][0], temp_hash[0]);
+        temp_hash = hash_combined_values(proof[i][j][0], temp_hash[0],  modulus);
       }
       else{// if mpz_cmp(proof[i][j][1], one) != 0) or when mpz_cmp(proof[i][j][1], zero) == 0
-        temp_hash = hash_combined_values(temp_hash[0], proof[i][j][0]);
+        temp_hash = hash_combined_values(temp_hash[0], proof[i][j][0],  modulus);
       }
     }
     if(j+1 == size_1){
@@ -407,7 +409,7 @@ bool doubleCheck_proof_(bigint*** proof, bigint root_node, int* challenge, int n
   return true;
 }
 
-
+//=========================
 byte* Gen_key(int key_size){
 
   byte* seed_;
@@ -417,20 +419,318 @@ byte* Gen_key(int key_size){
   return seed_;
 }
 
+//=================================
+bigint* encrypt(int val, byte* key, int key_size, byte* iv, int byte_){
+
+  string cipher, temp;
+  CBC_Mode< AES >::Encryption e;
+  bigint* res;
+  res = (bigint*)malloc(1 * sizeof(mpz_t));
+  unsigned char prn_[byte_];
+  e.SetKeyWithIV(key, key_size, iv);
+  StringSource sss(to_string(val), true, new StreamTransformationFilter(e, new StringSink(cipher)));
+  temp = cipher.substr (0, byte_);// truncate the ciphertext
+  memset(prn_, 0x00, byte_ + 1);
+  strcpy((char*)prn_, temp.c_str());
+  mpz_init(res[0]);
+  mpz_import(res[0], byte_, 1, 1, 0, 0, prn_);
+  return res;
+}
+
+//===============================
+bigint*** gen_encrypted_proof(int number_of_chall, int* challenge, bigint* file, int file_size, bigint** nodes, byte* key, byte* iv, int key_size, bigint* modulus, int byte_){
+
+  bigint*** proof;
+  proof = (bigint***)malloc(number_of_chall * sizeof(bigint));
+  int size_1 = log2(file_size) + 2; //number of elements in each proof (related to each challenge)
+  int number_of_levels = log2(file_size) + 1;// number of levels in the tree including leaf nodes
+  bigint* temp_hash, *temp_val;
+  string temp;
+  unsigned char prn_[byte_];
+  temp_hash = (mpz_t*)malloc(1 * sizeof(mpz_t));
+  temp_val = (mpz_t*)malloc(1 * sizeof(mpz_t));
+  string cipher;
+  CBC_Mode< AES >::Encryption e;
+	e.SetKeyWithIV(key, key_size, iv);// set the key
+  for(int i = 0; i < number_of_chall; i++){
+    //derive a key for each index i
+    StringSource s(to_string(i), true, new StreamTransformationFilter(e, new StringSink(cipher)));// encrypt the str_index
+    unsigned char der_key_0[key_size]; // convert the ciphertext into a der_key
+	  memset(der_key_0, 0x00, key_size + 1);
+	  strcpy((char*)der_key_0, cipher.c_str());
+	  cipher.clear();
+    proof[i] = (bigint**)malloc(size_1 * sizeof(bigint));
+    //go through different levels of the tree including leaf nodes
+    int j = 0;
+    for (int  k = 0; k < number_of_levels; k++){
+      if(k == 0){
+        if(challenge[i] % 2 == 0){ // if challenge[i] (or the index of challenged file block) is even
+          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
+          mpz_init_set(proof[i][j][0], file[challenge[i]]); // insert leaf node file[challenge[i]] to the proof
+          //// blinds each proof
+          temp_val = encrypt(j, der_key_0, key_size, iv, byte_);
+          mpz_add(proof[i][j][0], proof[i][j][0], temp_val[0]); // blinds each proof
+          mpz_mod(proof[i][j][0], proof[i][j][0], modulus[0]);
+          mpz_init_set_str(proof[i][j][1], "0", 10);
+          j++;
+          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
+          mpz_init_set(proof[i][j][0], file[challenge[i] + 1]); // insert the next leaf node file: [challenge[i]] to the proof
+          //// blinds each proof
+          temp_val = encrypt(j, der_key_0, key_size, iv, byte_);
+          mpz_add(proof[i][j][0], proof[i][j][0], temp_val[0]); // blinds each proof
+          mpz_mod(proof[i][j][0], proof[i][j][0], modulus[0]);
+          mpz_init_set_str(proof[i][j][1], "0", 10);
+          j++;
+          // generate hash(file[challenge[i]] ||file[challenge[i]+1])
+          temp_hash = hash_combined_values(file[challenge[i]],file[challenge[i] + 1], modulus[0]);
+        }
+        else{ // if challenge[i] is odd
+          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
+          mpz_init_set(proof[i][j][0], file[challenge[i]-1]); // insert leaf node file[challenge[i]] to the proof
+          //// blinds each proof
+          temp_val = encrypt(j, der_key_0, key_size, iv, byte_);
+          mpz_add(proof[i][j][0], proof[i][j][0], temp_val[0]); // blinds each proof
+          mpz_mod(proof[i][j][0], proof[i][j][0], modulus[0]);
+          mpz_init_set_str(proof[i][j][1], "0", 10);
+          j++;
+          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
+          mpz_init_set(proof[i][j][0], file[challenge[i]]); // insert the next leaf node file: [challenge[i]] to the proof
+          //// blinds each proof
+          temp_val = encrypt(j, der_key_0, key_size, iv, byte_);
+          mpz_add(proof[i][j][0], proof[i][j][0], temp_val[0]); // blinds each proof
+          mpz_mod(proof[i][j][0], proof[i][j][0], modulus[0]);
+          mpz_init_set_str(proof[i][j][1], "0", 10);
+          j++;
+          temp_hash = hash_combined_values(file[challenge[i]-1], file[challenge[i]], modulus[0]);
+        }
+      }
+      else{ // if k is not zero--   // find the index of temp_hash in the next level node
+        int nonil = file_size/(pow(2, k));//nonil: number_of_nodes_inEach_level
+        bool res_;
+        int index = find_index(nodes[k-1], nonil, temp_hash[0], res_); // find the index of temp_hash in nodes[k-1]
+        if(index % 2 == 0 && res_){
+          if(index == 0 && k+1 == number_of_levels){
+            //xxxx
+            proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
+            mpz_init_set(proof[i][j][0], nodes[k-1][index]);
+            //// blinds each proof
+            temp_val = encrypt(j, der_key_0, key_size, iv, byte_);
+            mpz_add(proof[i][j][0], proof[i][j][0], temp_val[0]); // blinds each proof
+            mpz_mod(proof[i][j][0], proof[i][j][0], modulus[0]);
+            mpz_init_set_str(proof[i][j][1], "0", 10);
+          }
+          else{
+            proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
+            mpz_init_set(proof[i][j][0], nodes[k-1][index+1]);
+            //// blinds each proof
+            temp_val = encrypt(j, der_key_0, key_size, iv, byte_);
+            mpz_add(proof[i][j][0], proof[i][j][0], temp_val[0]); // blinds each proof
+            mpz_mod(proof[i][j][0], proof[i][j][0], modulus[0]);
+            //
+            mpz_init_set_str(proof[i][j][1], "0", 10);
+            j++;
+            temp_hash = hash_combined_values(nodes[k-1][index], nodes[k-1][index+1], modulus[0]);
+          }
+        }
+        else if(index % 2 != 0 && res_){
+          proof[i][j] = (bigint*)malloc(2 * sizeof(bigint));
+          mpz_init_set(proof[i][j][0], nodes[k-1][index-1]);
+          //// blinds each proof
+          temp_val = encrypt(j, der_key_0, key_size, iv, byte_);
+          mpz_add(proof[i][j][0], proof[i][j][0], temp_val[0]); // blinds each proof
+          mpz_mod(proof[i][j][0], proof[i][j][0], modulus[0]);
+          mpz_init_set_str(proof[i][j][1], "1", 10);
+          j++;
+          temp_hash = hash_combined_values(nodes[k-1][index-1], nodes[k-1][index], modulus[0]);
+        }
+      }
+    }
+  }
+  mpz_clear(temp_hash[0]);
+  mpz_clear(temp_val[0]);
+  return proof;
+}
+
+//===============================
+vector<int> verify_encrypted_proof(bigint*** proof, bigint root_node, int* challenge, int number_of_chall, int file_size, int pad_size, byte* key, byte* iv, int key_size, bigint* modulus, int byte_){
+
+  int size_1 = log2(file_size) + 1;
+  int tail_1, tail_2;
+  bool is_in, is_in_;
+  vector<int> res_;
+  vector<int> vec;
+  bigint* temp_hash, * temp_val;
+  bigint one;
+  mpz_init_set_str(one, "1", 10);
+  temp_hash = (mpz_t*)malloc(1 * sizeof(mpz_t));
+  temp_val = (mpz_t*)malloc(1 * sizeof(mpz_t));
+  string cipher;
+  CBC_Mode< AES >::Encryption e;
+	e.SetKeyWithIV(key, key_size, iv);// set the key
+  for(int i = 0; i < number_of_chall; i++){
+    StringSource s(to_string(i), true, new StreamTransformationFilter(e, new StringSink(cipher)));// encrypt the str_index
+    unsigned char der_key_0[key_size]; // convert the ciphertext into a der_key
+    memset(der_key_0, 0x00, key_size + 1);
+    strcpy((char*)der_key_0, cipher.c_str());
+    cipher.clear();
+    for (int  j = 0; j < size_1; j++){
+      if(j == 0){
+        ///////// derive a key for index j
+        temp_val = encrypt(j, der_key_0, key_size, iv, byte_);//derive a key for index j
+        // unblind proof[i][j][0].
+        mpz_sub(temp_val[0], modulus[0], temp_val[0]);
+        mpz_add(proof[i][j][0], temp_val[0], proof[i][j][0]);
+        mpz_mod(proof[i][j][0], proof[i][j][0], modulus[0]);
+        ////////
+        temp_val = encrypt(j+1, der_key_0, key_size, iv, byte_);//derive a key for index j+1
+        // unblind proof[i][j+1][0].
+        mpz_sub(temp_val[0], modulus[0], temp_val[0]);
+        mpz_add(proof[i][j+1][0], temp_val[0], proof[i][j+1][0]);
+        mpz_mod(proof[i][j+1][0], proof[i][j+1][0], modulus[0]);
+        // extract the tail of the two leaf nodes
+        tail_1 = extract_tail(proof[i][j][0], pad_size);
+        tail_2 = extract_tail(proof[i][j+1][0], pad_size);
+        // check if the tail equals the related challenge.
+        is_in = search(challenge, number_of_chall, tail_1);
+        is_in_ = search(challenge, number_of_chall, tail_2);
+        // check if (1) either proof[i][j][0] or  proof[i][j+1][0] is the challenged block,
+        // and (2) there is no duplication of proof.
+        if(((is_in || is_in_) == true) && (find(vec.begin(), vec.end(), challenge[i]) == vec.end())){
+          temp_hash = hash_combined_values(proof[i][j][0], proof[i][j+1][0], modulus[0]);
+          vec.push_back(challenge[i]);
+        }
+        else{
+          res_.push_back(i);// store the index of rejected proof
+          break; //exit the inner loop.
+        }
+        j++;
+      }
+      else{ // if j!=0
+        temp_val = encrypt(j, der_key_0, key_size, iv, byte_);//derive a key for index j
+        // unblind proof[i][j][0].
+        mpz_sub(temp_val[0], modulus[0], temp_val[0]);
+        mpz_add(proof[i][j][0], temp_val[0], proof[i][j][0]);
+        mpz_mod(proof[i][j][0], proof[i][j][0], modulus[0]);
+        if(mpz_cmp(proof[i][j][1], one) == 0){
+          temp_hash = hash_combined_values(proof[i][j][0], temp_hash[0], modulus[0]);
+        }
+        else{// if mpz_cmp(proof[i][j][1], one) != 0) or when mpz_cmp(proof[i][j][1], zero) == 0
+          temp_hash = hash_combined_values(temp_hash[0], proof[i][j][0], modulus[0]);
+        }
+      }
+      if(j+1 == size_1){
+        if(mpz_cmp(temp_hash[0], root_node)!=0){
+          res_.push_back(i); // store the index of rejected proof
+        }
+      }
+    }
+  }
+  mpz_clear(temp_hash[0]);
+  return res_;
+}
+
+//==============================
+bigint* gen_public_key(int bit_size){
+
+  bigint* res;
+  res =  (bigint*)malloc(1 * sizeof(mpz_t));
+  mpz_init(res[0]);
+  Random rd;
+  res = rd.gen_randSet(1, bit_size);
+  mpz_nextprime(res[0], res[0]);
+  return res;
+}
+
+//=====================================
+bool doubleCheck_encrypted_proof_(bigint*** proof, bigint root_node, int* challenge, int number_of_chall, int file_size, int pad_size, int rejected_proof_index, byte* key, byte* iv, int key_size, bigint* modulus, int byte_){
+
+  int size_1 = log2(file_size) + 1;
+  int tail_1, tail_2;
+  bool is_in, is_in_;
+  bigint* temp_hash, * temp_val;
+  bigint one;
+  mpz_init_set_str(one, "1", 10);
+  temp_hash = (mpz_t*)malloc(1 * sizeof(mpz_t));
+  temp_val = (mpz_t*)malloc(1 * sizeof(mpz_t));
+  mpz_init(temp_val[0]);
+  int i = rejected_proof_index;
+  //----1- encrypt i
+  string cipher;
+  CBC_Mode< AES >::Encryption e;
+	e.SetKeyWithIV(key, key_size, iv);// set the key
+  StringSource s(to_string(i), true, new StreamTransformationFilter(e, new StringSink(cipher)));// encrypt the str_index
+  unsigned char der_key_0[key_size]; // convert the ciphertext into a der_key
+  memset(der_key_0, 0x00, key_size + 1);
+  strcpy((char*)der_key_0, cipher.c_str());
+  cipher.clear();
+  cout<<proof[i][0][0]<<endl;
+  for (int  j = 0; j < size_1; j++){
+    if(j == 0){
+
+      temp_val = encrypt(j, der_key_0, key_size, iv, byte_);//derive a key for index j
+      // unblind proof[i][j][0].
+      mpz_sub(temp_val[0], modulus[0], temp_val[0]);
+      mpz_add(proof[i][j][0], temp_val[0], proof[i][j][0]);
+      mpz_mod(proof[i][j][0], proof[i][j][0], modulus[0]);
+      temp_val = encrypt(j+1, der_key_0, key_size, iv, byte_);//derive a key for index j+1
+      // unblind proof[i][j+1][0].
+      mpz_sub(temp_val[0], modulus[0], temp_val[0]);
+      mpz_add(proof[i][j+1][0], temp_val[0], proof[i][j+1][0]);
+      mpz_mod(proof[i][j+1][0], proof[i][j+1][0], modulus[0]);
+      // extract the tail of the two leaf nodes
+      tail_1 = extract_tail(proof[i][j][0], pad_size);
+      tail_2 = extract_tail(proof[i][j+1][0], pad_size);
+        // check if the tail equals the related challenge.
+      if(challenge[i] == tail_1 || challenge[i] == tail_2){
+        temp_hash = hash_combined_values(proof[i][j][0], proof[i][j+1][0], modulus[0]);
+      }
+      else{
+        cout<<"\n Proof is invalid"<<endl;
+        return false;
+      }
+      j++;
+    }
+    else{ // if j!=0
+
+      temp_val = encrypt(j, der_key_0, key_size, iv, byte_);//derive a key for index j
+      // unblind proof[i][j][0].
+      mpz_sub(temp_val[0], modulus[0], temp_val[0]);
+      mpz_add(proof[i][j][0], temp_val[0], proof[i][j][0]);
+      mpz_mod(proof[i][j][0], proof[i][j][0], modulus[0]);
+      if(mpz_cmp(proof[i][j][1], one) == 0){
+        temp_hash = hash_combined_values(proof[i][j][0], temp_hash[0],  modulus[0]);
+      }
+      else{// if mpz_cmp(proof[i][j][1], one) != 0) or when mpz_cmp(proof[i][j][1], zero) == 0
+        temp_hash = hash_combined_values(temp_hash[0], proof[i][j][0],  modulus[0]);
+      }
+    }
+    if(j+1 == size_1){
+      if(mpz_cmp(temp_hash[0], root_node)!=0){
+        cout<<"\n Proof is invalid"<<endl;
+        return false;
+      }
+    }
+  }
+  mpz_clear(temp_hash[0]);
+  return true;
+}
+
 //===============================
 int main() {
   bigint* file;
   bigint test_,root_, root_s;
   bigint** nodes, **nodes_;
-  int file_size = 2048;
+  int file_size = 1024;
   string binary_fileSize = toBinary(file_size);
   int pad_size = binary_fileSize.length()+1;
-  int block_bit_size = 128;
+  int block_bit_size = 90;
   int number_of_levels = log2(file_size);
-  int number_of_chall = 100;
+  int number_of_chall = 20;
   int bit_size_of_chall = 80;
   int int_modulus = file_size;
+  int public_key_size = 128;
   int rejected_proof_index;
+
   file = (bigint*)malloc(file_size * sizeof(bigint));
   Random rd_;
   // Genenerate a random file
@@ -441,36 +741,30 @@ int main() {
   cout<<"\n-----1- Generates a fresh key for the pseudorandom function-----"<<endl;
   int key_size = AES::DEFAULT_KEYLENGTH;
   int block_size = AES::BLOCKSIZE;
-  // byte seed_[key_size];
-  // byte iv[block_size];
-  //generate seed_ and iv;
-  //CryptoPP::AutoSeededRandomPool prng;
+  bigint* modulus;
   byte* seed;
   byte* iv;
+  //generate seed_ and iv;
   seed = Gen_key(key_size);// seed: master seed for PRF
   iv = Gen_key(block_size);// iv for PRF
-  //CBC_Mode< AES >::Encryption e;
-	//e.SetKeyWithIV(seed, key_size, iv);
-
+  modulus = gen_public_key(public_key_size);
   //////////////////////////////////////////////
   //// 2- Client-side Initiation
   cout<<"\n-------2- Client-side Initiation-----------"<<endl;
-  // PoRID.setup-----"<<endl;
   cout<<"\n a- Encoding the file"<<endl;
   bigint* encoded_file = encode_file(file, file_size, pad_size);
   // 2.1- build a Merkle tree on the encoded file.
   cout<<"\n b- Building a tree on the file"<<endl;
-  nodes = build_MT_tree(encoded_file, file_size);
+  nodes = build_MT_tree(encoded_file, file_size, modulus[0]);
   // 2.2- extract the root
   mpz_init_set(root_, nodes[number_of_levels - 1][0]);
   ///////////////////////////////////////////////////
-
   //// 3- Server-side Initiation
   cout<<"\n-----3- Server-side Initiation-----"<<endl;
   // PoRID.serve
   // 3.a- build a Merkle tree on the encoded file.
   cout<<"\n Building a tree on the file"<<endl;
-  nodes_ = build_MT_tree(encoded_file, file_size);
+  nodes_ = build_MT_tree(encoded_file, file_size, modulus[0]);
   // 3.b- extract the root of the tree
   mpz_init_set(root_s, nodes_[number_of_levels - 1][0]);
   // 3.c- compare the two roots (i.e., the one it generated with the root generated by the  client)
@@ -479,12 +773,10 @@ int main() {
     return 0;
   }
   ///////////////////////////////////////////////////
-
   //// 4- Client-side Query Generation.
   cout<<"\n-----4- Client-side Query Generation-----"<<endl;
   int* chall = gen_chall_(number_of_chall, bit_size_of_chall, int_modulus);
-
-
+  ///////////////////////////////////////////////////
   //// 5- Server-side Proof Generation
   cout<<"\n-----5- Server-side Proof Generation-----"<<endl;
   // 5.1. check query
@@ -495,27 +787,18 @@ int main() {
     return 0;
   }
   cout<<"\n b- generate a proof-----"<<endl;
-  bigint*** proof_ = gen_proof(number_of_chall, chall, encoded_file, file_size, nodes);
+  int byte =(public_key_size)/8 ;
+  bigint***proof_= gen_encrypted_proof(number_of_chall, chall, encoded_file, file_size, nodes, seed, iv, key_size, modulus, byte);
   cout<<"\n c- encrypt the proof-----"<<endl;
-
-
-
-
-
+  ///////////////////////////////////////////////////
   //// 6- verify valid proofs
-
-
-
   cout<<"\n-----Verify proofs-----"<<endl;
-
-
   //xxxxx--------Comment this out to see the result of an invalid proof.
   // bigint one;
   // mpz_init_set_str(one, "4564564654564654456",10);
   // mpz_set(proof_[1][0][0],one);
   //xxxxxx-------------------
-
-  vector<int> vec_ = verify_proof(proof_, root_, chall, number_of_chall, file_size, pad_size);
+  vector<int>vec_ = verify_encrypted_proof(proof_, root_, chall, number_of_chall, file_size, pad_size, seed, iv, key_size, modulus, byte);
   string status;
   if(vec_.size() == 0){
     status = "All proofs are VALID";
@@ -536,20 +819,29 @@ int main() {
       }
     }
   }
-  cout<<"\n\n------Identify a misbehaving party------"<<endl;
+  ////////////////////////////////
   //// 7- Identify
+  cout<<"\n\n------Identify a misbehaving party------"<<endl;
+  bool detected = false;
   // 7.a. Verify Query
   bool check_q_ = check_query(chall, number_of_chall, file_size);
   if (!check_q_){
-    cout<<"\n The query has been rejected by the Auditor"<<endl;
+    cout<<"\n The query has been rejected by the Auditor-So the Client is malicious"<<endl;
+    detected = true;
     return 0;
   }
   // 7.b. Check a certain proof, given rejected_proof_index.
-  bool double_check = doubleCheck_proof_(proof_, root_, chall, number_of_chall, file_size, pad_size, rejected_proof_index);
+  if(vec_.size() != 0){
+  bool double_check = doubleCheck_encrypted_proof_(proof_, root_, chall, number_of_chall, file_size, pad_size, rejected_proof_index, seed, iv, key_size, modulus, byte);
+  //bool double_check = doubleCheck_proof_(proof_, root_, chall, number_of_chall, file_size, pad_size, rejected_proof_index, modulus);
   if (!double_check){
-    cout<<"\n Proof has been rejected by the Auditor"<<endl;
+    cout<<"\n Proof has been rejected by the Auditor--So the Server is malicious"<<endl;
+    detected = true;
+  }}
+  if (!detected){
+    cout<<"\n No misbehaviour was detected"<<endl;
   }
-
+  cout<<"-------------------"<<endl;
   cout<<endl;
   return 0;
 }
