@@ -1,5 +1,10 @@
-// Ethereum Smart contract of RC-PoR-P.
-// Author: Aydin Abadi. The code is under MIT licence. 
+// This is a source code of Ethereum Smart contract for "Recurring Contingent Proof of Retreivability Payment (RC-PoR-P)" protocol.
+// It is a conbined contract that includes both SAP and SC smart contracts. 
+// After deployment of the contract, to interact with the contract you can use either of the following options: 
+// (1) ''Go Ethereum (Geth)'' that allows interactions via command line. 
+// (2) Ready-to-use user interface (UI) such as Ethereum remix: https://remix.ethereum.org/
+// (3) A customised UI that you have developed (using javascripts and web3).
+// Author: Aydin Abadi: www.aydinabadi.com
 
 pragma solidity >=0.4.22 <0.5.0;
 
