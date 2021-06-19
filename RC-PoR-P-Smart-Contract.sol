@@ -68,6 +68,7 @@ contract RCSP{
             }
         }
     }
+    //================================
     // -----------------------SAP_qp functions: they are used for qp ---------------------------
     // This function runs only step 1.d, i.e. it stores g_c_qp
     // it can be called by the client during client-side initiation phase/period (i.e. within the 1st delta)
@@ -81,6 +82,7 @@ contract RCSP{
             }
         }
     }
+    //================================
     // This function only stores the server's commitment. 
     // it can be called by the server (in step 3.b.) until the server-side initiation is finished, i.e. within the 1st two deltas.
     function SAP_qp_agree(bytes32 g_s_qp_) public {
@@ -92,6 +94,7 @@ contract RCSP{
             }
         }
     }
+    //================================
     // This function is called ''locally'' by the arbier in step 7.c.i and 7.d.i. 
     function SAP_qp_verify(uint x_1, uint x_2, bytes32 r)  public returns(bool res) {
 
@@ -99,6 +102,7 @@ contract RCSP{
             res = true;
         }
     }
+    //================================
     // ---------------------SAP_2 functions: they are used for cp -----------------
     // The following SAP functions are basically the same as SAP_qp functions, the only difference is 
     // SAP_cp_init() runs only in step 1.d, i.e. it stores g_c_cp
@@ -113,6 +117,7 @@ contract RCSP{
             }
         }
     }
+    //================================
     // This function only stores the server's commitment
     // it can be called by the server in step 3.b. until the server-side initiation is finished, i.e. within the 1st two deltas.
     function SAP_cp_agree(bytes32 g_s_cp_) public {
@@ -124,6 +129,7 @@ contract RCSP{
             }
         }
     }
+    //================================
     // This function is called by the contract, in particular pay() function.
     // x_i are elements of cp. Also, r is a random value. 
     function SAP_cp_verify(uint x_1,uint x_2,uint x_3,uint x_4,uint x_5, bytes32 r)  public returns(bool res) {
@@ -132,19 +138,20 @@ contract RCSP{
             res = true;
         }
     }
+    //================================
     // The following two functions determine (a) the current slot index (in how many deltas have passed after the contract's deployment),
     // ... and (b) verifiction's index 
-    //----------------------------
     function current_slot() public returns (int256 res){
         
         int256 index = current_ver_indx = current_verification_index();
         res = current_slot_indx = int256((int256(now) - start - 2 * delta - (3 * delta * (index-1))))/int256(delta);
     }
-    
+    //================================
     function current_verification_index() public returns (int256 res){
            
         res = 1 + (int256(now) - start - (2 * delta)) / int256(3 * delta);
     }
+    //================================
     // This function stores the client's query during in the 1st period (or delta) of each verification.
     // it recieves the query sent by the client in step 4.b
     function query(bytes32 q_) public {
@@ -155,6 +162,7 @@ contract RCSP{
           queries[current_verification_index_] = q_;  
         }
     } 
+    //================================
     // This function stores the server's proof during in the 2st period (or delta) of each verification.
     // it recieves the padded encrypted proofs sent by the server in step 5.c
     function get_proof(bytes pi_star_j_) public{
@@ -165,6 +173,7 @@ contract RCSP{
             proofs[current_verification_index_] = pi_star_j_;
         }
     }
+    //================================
     // This function recieves the arbiter's input. 
     // it recieves the values that the arbiter sends in step 7.f
     function get_input_of_arbiter(uint y_c_, uint y_prime_c_, uint y_s_, uint y_prime_s_) public{
@@ -177,6 +186,7 @@ contract RCSP{
             y_prime_s = y_prime_s_;
         }
     }
+    //================================
     // This function recieves message either at the end of phase 2 or in phase 8. 
     function pay (uint o_, uint o_max_, uint l_, uint l_max_, uint z_, bytes32 r_cp_) public{
         //withdraw 
