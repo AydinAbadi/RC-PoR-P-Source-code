@@ -1,4 +1,9 @@
-//author: Aydin Abadi
+// The source code of "recurring contingent proofs of retreivability payment (RC-PoR-P)" in C++. 
+// It includes Merkle tree functions (a) build_MT_tree, (b) gen_proof, and (c) verify_proof that is of independent interest. 
+// Moreover, regarding the Merkle tree, two additional functions: (a) gen_encrypted_proof and (b) verify_encrypted_proof have been provided. 
+// These two functions can be used when there is a need to efficiently generate encrtped proofs and verify the encrypted proofs. 
+// To encrypt such proofs efficiently one-time pad has been used in this implementation. 
+// Author: Aydin Abadi: www.aydinabadi.com
 #include <iostream>
 #include <math.h>
 #include <string>
@@ -893,5 +898,3 @@ int main() {
   cout<<endl;
   return 0;
 }
-
-
